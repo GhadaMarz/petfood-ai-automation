@@ -33,6 +33,9 @@ MAX_TYPOS = 1
 RC_BARCODE_PREFIXES = ("3182550", "0030111", "7896181", "7908248")
 # Other brands caught by the filter or the barcode prefix, excluded after review (compared without case or symbols).
 EXCLUDED_BRANDS = ("zooroyal", "brekkies", "affinity", "clubspecialperformance", "pureorigine")
+# Products found by a single word but validated by hand as Royal Canin ranges with a garbled name:
+# "Total canin junior" (Mars Austria barcode), "Royal caes dermacomfort", "Royal pug adult", "Royal light".
+VALIDATED_BARCODES = ("9003579311479", "0833984214008", "8896111214908", "2894281213376")
 
 
 def edit_distance(a, b):
@@ -48,11 +51,26 @@ def edit_distance(a, b):
     return previous[-1]
 
 
-def match_reason(text):
-    # Ignore case, accents and punctuation, then compare words and adjacent word pairs to the targets.
+def candidate_words(text):
+    # Ignore case, accents and punctuation; return the words and adjacent word pairs ("royal canin" -> "royalcanin").
     text = unicodedata.normalize("NFKD", str(text)).encode("ascii", "ignore").decode().lower()
     words = re.findall(r"[a-z0-9]+", text)
-    candidates = words + [a + b for a, b in zip(words, words[1:])]
+    return words + [a + b for a, b in zip(words, words[1:])]
+
+
+def is_like(word, target):
+    return target in word or edit_distance(word, target) <= MAX_TYPOS
+
+
+def names_royal_and_canin(text):
+    # True when both "royal" and "canin" appear, each possibly with one typo, together or as separate words.
+    candidates = candidate_words(text)
+    return any(is_like(w, "royal") for w in candidates) and any(is_like(w, "canin") for w in candidates)
+
+
+def match_reason(text):
+    # Compare words and adjacent word pairs to the targets.
+    candidates = candidate_words(text)
     for word in candidates:
         if "royal" in word or "canin" in word:
             return f"contains:{word}"
@@ -80,6 +98,14 @@ compact_text = source_text.fillna("").map(
 excluded = reasons.notna() & compact_text.map(lambda t: any(brand in t for brand in EXCLUDED_BRANDS))
 print(f"\nExcluded brands removed: {excluded.sum()}")
 reasons[excluded] = None
+
+# A single word ("royal", "canine", "cani"...) is weak evidence: also require both words in the brand or product
+# name, unless the barcode has a Royal Canin prefix or the product was validated by hand.
+rc_barcode = gtin13.str.startswith(RC_BARCODE_PREFIXES) | code.isin(VALIDATED_BARCODES)
+both_words = (catalogue["brands"].fillna("") + " " + catalogue["product_name"].fillna("")).map(names_royal_and_canin)
+single_word = reasons.notna() & ~rc_barcode & ~both_words
+print(f"Single-word matches removed: {single_word.sum()}")
+reasons[single_word] = None
 
 # Save the fields needed for further analysis, with the reason each product was kept.
 rc = catalogue[reasons.notna()].copy()

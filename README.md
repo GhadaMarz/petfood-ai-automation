@@ -48,7 +48,10 @@ A plain brand search for "royal canin" finds only 226 products. The filter keeps
    such as Whiskas and Kitekat.
 
 Brands caught by mistake are then excluded, whatever rule matched them: Zooroyal, Brekkies / Affinity,
-"club special performance" and "pure origine". Every kept product records why in `match_reason`
+"club special performance" and "pure origine". A single word is not enough either: a product must name both
+"royal" and "canin" (in its brand or product name), carry a Royal Canin barcode prefix, or be one of 4 products
+validated by hand. This removes competitor products such as Hill's "Canine" ranges or Italian "per cani" (for dogs)
+names. Every kept product records why in `match_reason`
 (for example `brands:contains:royal`, `product_name:typo:cani` or `barcode:0030111`), so each inclusion can be
 justified and doubtful cases reviewed.
 
@@ -106,21 +109,21 @@ python ai_quality_assistant.py --language English
 |---|---|
 | Products in the catalogue | 15,136 |
 | Found by a plain "royal canin" brand search | 226 |
-| Royal Canin perimeter | **557** |
-| Products with at least one defect | 542 (97 %) |
-| Average completeness score | 60 % |
-| Weights suggested from the product name | 58 of 239 products with a missing or implausible quantity |
+| Royal Canin perimeter | **515** |
+| Products with at least one defect | 500 (97 %) |
+| Average completeness score | 61 % |
+| Weights suggested from the product name | 58 of 209 products with a missing or implausible quantity |
 
 | Rule | Products |
 |---|---|
-| `missing_ingredients` | 468 |
-| `non_standard_brand` | 460 |
-| `missing_category` | 377 |
-| `missing_brand` | 315 |
-| `missing_quantity` | 196 |
-| `stale_record` | 161 |
-| `missing_name` | 59 |
-| `implausible_weight` | 43 |
+| `missing_ingredients` | 429 |
+| `non_standard_brand` | 418 |
+| `missing_category` | 342 |
+| `missing_brand` | 282 |
+| `missing_quantity` | 168 |
+| `stale_record` | 143 |
+| `missing_name` | 58 |
+| `implausible_weight` | 41 |
 | `invalid_barcode` | 6 |
 | `implausible_protein`, `implausible_fat`, `duplicate_barcode` | 0 |
 
@@ -156,4 +159,3 @@ The tests also run on GitHub Actions at every push (`.github/workflows/tests.yml
 
 - Open Pet Food Facts is collaborative: records are entered by contributors, not by Royal Canin.
 - The GS1 prefixes were inferred from the data and still need confirming in the GS1 registry (GEPIR).
-- 39 products are kept only because of words like "canine", "cani" or "canis" and still need a decision.
