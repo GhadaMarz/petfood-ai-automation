@@ -224,3 +224,6 @@ data/en.openpetfoodfacts*
 # Salesforce CLI local state
 .sf/
 .sfdx/
+
+# Personal project notes (Word, PDF): kept out of the public repository
+Documentation/
