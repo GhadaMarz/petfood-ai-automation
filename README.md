@@ -79,8 +79,19 @@ name: "PERSIAN 4KG" → 4000, "1,5kg" → 1500, "15 KG+3KG" (bonus bag) → 1800
 
 ### 3. Salesforce file (`prepare_import.py`)
 
-Selects and renames the fields of the Salesforce template, applies field-length limits, converts numbers and dates,
-and drops products without a barcode.
+Selects the fields of the `Pet_Food_Product__c` object, names the columns with their API names (as the Bulk API
+requires), applies field-length limits, rounds numbers to each field's decimals, formats dates and drops products
+without a barcode.
+
+`scripts/import_salesforce.sh` rebuilds this file and **upserts** it into the org on `Barcode__c`, an external ID
+marked unique: running the import again updates existing records instead of creating duplicates.
+
+```bash
+scripts/import_salesforce.sh            # default org alias: petfood-dev
+```
+
+The object, its fields, tab, page layout and the "Pet Food Data Steward" permission set are Salesforce DX metadata in
+`force-app/`.
 
 ### 4. AI assistant (`ai_quality_assistant.py`)
 

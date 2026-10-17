@@ -5,6 +5,11 @@
     <hasActivationRequired>false</hasActivationRequired>
     <fieldPermissions>
         <editable>true</editable>
+        <field>Pet_Food_Product__c.Barcode__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
         <field>Pet_Food_Product__c.Brand__c</field>
         <readable>true</readable>
     </fieldPermissions>
