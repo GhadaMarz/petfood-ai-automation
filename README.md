@@ -79,6 +79,27 @@ name: "PERSIAN 4KG" → 4000, "1,5kg" → 1500, "15 KG+3KG" (bonus bag) → 1800
 Selects and renames the fields of the Salesforce template, applies field-length limits, converts numbers and dates,
 and drops products without a barcode.
 
+### 4. AI assistant (`ai_quality_assistant.py`)
+
+Calls the Claude API (`claude-opus-5-5`) to:
+
+- **suggest brand corrections** for every brand spelling that is not exactly "Royal Canin": correct it to
+  "Royal Canin", keep it as another manufacturer's brand, or flag it for review, with a confidence level and a reason.
+  The answer is constrained to a JSON schema and saved to `data/brand_suggestions.csv`. Nothing is changed in the data:
+  the suggestions are for a data steward to approve.
+- **write a readable quality report** (`reports/quality_report.md`) for business readers. All figures are computed in
+  Python first, so the model explains the numbers but never counts them.
+
+The API key is read from the `ANTHROPIC_API_KEY` environment variable and never written in the code. Requests opt into
+server-side refusal fallbacks (`fallbacks: "default"`).
+
+```bash
+export ANTHROPIC_API_KEY=...                 # your key, from console.anthropic.com
+python ai_quality_assistant.py --dry-run     # show what would be sent, without calling the API
+python ai_quality_assistant.py               # brand suggestions + report in French
+python ai_quality_assistant.py --language English
+```
+
 ## Results (October 2026)
 
 | Indicator | Value |
@@ -117,6 +138,7 @@ pip install -r requirements.txt
 python profile_data.py     # raw catalogue -> data/royal_canin_products.csv
 python dq_check.py         # quality rules  -> data/dq_report.csv
 python prepare_import.py   # Salesforce     -> data/salesforce_import.csv
+python ai_quality_assistant.py  # Claude API -> data/brand_suggestions.csv, reports/quality_report.md
 ```
 
 ## Tests
