@@ -23,6 +23,7 @@ out = pd.DataFrame({
     "Ingredients": txt("ingredients_text", 5000),
     "Quantity": txt("quantity", 255),
     "Weight (g)": num("product_quantity"),
+    "Suggested Weight (g)": num("suggested_quantity"),
     "Countries": txt("countries", 255),
     "Last Modified": pd.to_datetime(df["last_modified_datetime"], errors="coerce", utc=True).dt.strftime("%Y-%m-%d"),
     "Protein (%)": num("proteins_100g"),

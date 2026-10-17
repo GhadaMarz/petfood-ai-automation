@@ -1,5 +1,27 @@
 from pathlib import Path
+import re
 import pandas as pd
+
+# A weight written in a product name: "4KG", "1,5 kg", "400 GR", "12+2 KG" (bonus) or "12X85G" (multipack).
+WEIGHT = re.compile(r"(?:(\d+)\s*[x×]\s*)?(\d+(?:[.,]\d+)?)(?:\s*\+\s*(\d+(?:[.,]\d+)?))?\s*(kg|gr|g|lbs?|oz)(?![a-z])",
+    re.IGNORECASE)
+GRAMS_PER_UNIT = {"kg": 1000, "gr": 1, "g": 1, "lb": 453.592, "lbs": 453.592, "oz": 28.3495}
+
+
+def extract_weight_g(name):
+    """Return the weight in grams found in a product name, or None. "15 KG+3KG" bonus bags are added up."""
+    if not isinstance(name, str):
+        return None
+    total, previous_end = 0.0, None
+    for match in WEIGHT.finditer(name):
+        if previous_end is not None and name[previous_end:match.start()].strip() != "+":
+            break
+        count, amount, bonus, unit = match.groups()
+        amount = float(amount.replace(",", ".")) + (float(bonus.replace(",", ".")) if bonus else 0)
+        total += int(count or 1) * amount * GRAMS_PER_UNIT[unit.lower()]
+        previous_end = match.end()
+    return round(total) if total else None
+
 
 # Load the Royal Canin product data from the project data directory.
 DATA = Path(__file__).resolve().parent / "data"
@@ -39,6 +61,10 @@ df["issues"] = issues.apply(lambda r: ", ".join(issues.columns[r.values]), axis=
 df["issue_count"] = issues.sum(axis=1)
 df["completeness_score"] = (df[KEY_FIELDS].notna().mean(axis=1) * 100).round(0)
 
+# Suggest a weight in grams from the product name when the quantity is missing or implausible.
+needs_quantity = issues["missing_quantity"] | issues["implausible_weight"]
+df["suggested_quantity"] = df["product_name"].where(needs_quantity).map(extract_weight_g).astype("Int64")
+
 # Save the checked products and their quality results.
 df.to_csv(DATA / "dq_report.csv", index=False, sep=";", decimal=",", encoding="utf-8-sig")  # French Excel format
 
@@ -49,4 +75,5 @@ print(f"Products with at least one issue: {with_issue.sum()} ({with_issue.mean()
 print(f"Average completeness score: {df['completeness_score'].mean():.0f}%\n")
 print("Issues by rule:")
 print(issues.sum().sort_values(ascending=False).to_string())
+print(f"\nQuantities suggested from the product name: {df['suggested_quantity'].notna().sum()} of {needs_quantity.sum()}")
 print("\nSaved: data/dq_report.csv")
