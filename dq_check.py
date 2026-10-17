@@ -3,7 +3,8 @@ import pandas as pd
 
 # Load the Royal Canin product data from the project data directory.
 DATA = Path(__file__).resolve().parent / "data"
-df = pd.read_csv(DATA / "royal_canin_products.csv", dtype={"code": str})
+df = pd.read_csv(DATA / "royal_canin_products.csv", dtype={"code": str},
+    sep=";", decimal=",", encoding="utf-8-sig")
 
 # Define fields used to calculate product completeness and the reference time for stale records.
 KEY_FIELDS = ["product_name", "categories", "ingredients_text", "quantity", "countries"]
@@ -29,6 +30,7 @@ rules = {
     "duplicate_barcode": code.duplicated(keep=False) & (code != ""),
     "non_standard_brand": df["brands"].str.strip() != "Royal Canin",
     "stale_record": modified < today - pd.DateOffset(years=3),
+    "missing_brand": df["brands"].isna()
 }
 
 # Combine rule results into per-product issue details and completeness scores.
@@ -38,7 +40,7 @@ df["issue_count"] = issues.sum(axis=1)
 df["completeness_score"] = (df[KEY_FIELDS].notna().mean(axis=1) * 100).round(0)
 
 # Save the checked products and their quality results.
-df.to_csv(DATA / "dq_report.csv", index=False)
+df.to_csv(DATA / "dq_report.csv", index=False, sep=";", decimal=",", encoding="utf-8-sig")  # French Excel format
 
 # Summarize the overall results and counts for each quality rule.
 with_issue = df["issue_count"] > 0
