@@ -23,57 +23,64 @@ def extract_weight_g(name):
     return round(total) if total else None
 
 
-# Load the Royal Canin product data from the project data directory.
+# Fields used to calculate product completeness.
 DATA = Path(__file__).resolve().parent / "data"
-df = pd.read_csv(DATA / "royal_canin_products.csv", dtype={"code": str},
-    sep=";", decimal=",", encoding="utf-8-sig")
-
-# Define fields used to calculate product completeness and the reference time for stale records.
 KEY_FIELDS = ["product_name", "categories", "ingredients_text", "quantity", "countries"]
-today = pd.Timestamp.now(tz="UTC")
 
-# Convert values to usable types before checking numeric ranges and record age.
-qty = pd.to_numeric(df["product_quantity"], errors="coerce")
-prot = pd.to_numeric(df["proteins_100g"], errors="coerce")
-fat = pd.to_numeric(df["fat_100g"], errors="coerce")
-modified = pd.to_datetime(df["last_modified_datetime"], errors="coerce", utc=True)
-code = df["code"].fillna("")
 
-# Evaluate each data-quality rule for every product.
-rules = {
-    "missing_name": df["product_name"].isna(),
-    "missing_category": df["categories"].isna(),
-    "missing_ingredients": df["ingredients_text"].isna(),
-    "missing_quantity": df["quantity"].isna() & qty.isna(),
-    "implausible_weight": (qty <= 0) | (qty > 20000),
-    "implausible_protein": (prot < 0) | (prot > 60),
-    "implausible_fat": (fat < 0) | (fat > 40),
-    "invalid_barcode": ~code.str.fullmatch(r"\d{8}|\d{12,14}"),
-    "duplicate_barcode": code.duplicated(keep=False) & (code != ""),
-    "non_standard_brand": df["brands"].str.strip() != "Royal Canin",
-    "stale_record": modified < today - pd.DateOffset(years=3),
-    "missing_brand": df["brands"].isna()
-}
+def evaluate_rules(df, today):
+    """Return one boolean column per data-quality rule, True when the product has the defect."""
+    # Convert values to usable types before checking numeric ranges and record age.
+    qty = pd.to_numeric(df["product_quantity"], errors="coerce")
+    prot = pd.to_numeric(df["proteins_100g"], errors="coerce")
+    fat = pd.to_numeric(df["fat_100g"], errors="coerce")
+    modified = pd.to_datetime(df["last_modified_datetime"], errors="coerce", utc=True)
+    code = df["code"].fillna("")
 
-# Combine rule results into per-product issue details and completeness scores.
-issues = pd.DataFrame(rules)
-df["issues"] = issues.apply(lambda r: ", ".join(issues.columns[r.values]), axis=1)
-df["issue_count"] = issues.sum(axis=1)
-df["completeness_score"] = (df[KEY_FIELDS].notna().mean(axis=1) * 100).round(0)
+    return pd.DataFrame({
+        "missing_name": df["product_name"].isna(),
+        "missing_category": df["categories"].isna(),
+        "missing_ingredients": df["ingredients_text"].isna(),
+        "missing_quantity": df["quantity"].isna() & qty.isna(),
+        "implausible_weight": (qty <= 0) | (qty > 20000),
+        "implausible_protein": (prot < 0) | (prot > 60),
+        "implausible_fat": (fat < 0) | (fat > 40),
+        "invalid_barcode": ~code.str.fullmatch(r"\d{8}|\d{12,14}"),
+        "duplicate_barcode": code.duplicated(keep=False) & (code != ""),
+        "non_standard_brand": df["brands"].str.strip() != "Royal Canin",
+        "stale_record": modified < today - pd.DateOffset(years=3),
+        "missing_brand": df["brands"].isna()
+    })
 
-# Suggest a weight in grams from the product name when the quantity is missing or implausible.
-needs_quantity = issues["missing_quantity"] | issues["implausible_weight"]
-df["suggested_quantity"] = df["product_name"].where(needs_quantity).map(extract_weight_g).astype("Int64")
 
-# Save the checked products and their quality results.
-df.to_csv(DATA / "dq_report.csv", index=False, sep=";", decimal=",", encoding="utf-8-sig")  # French Excel format
+def check(df, today):
+    """Add issues, issue_count, completeness_score and suggested_quantity to the products; also return the rule table."""
+    df = df.copy()
+    issues = evaluate_rules(df, today)
+    df["issues"] = issues.apply(lambda r: ", ".join(issues.columns[r.values]), axis=1)
+    df["issue_count"] = issues.sum(axis=1)
+    df["completeness_score"] = (df[KEY_FIELDS].notna().mean(axis=1) * 100).round(0)
 
-# Summarize the overall results and counts for each quality rule.
-with_issue = df["issue_count"] > 0
-print(f"Products checked: {len(df)}")
-print(f"Products with at least one issue: {with_issue.sum()} ({with_issue.mean():.0%})")
-print(f"Average completeness score: {df['completeness_score'].mean():.0f}%\n")
-print("Issues by rule:")
-print(issues.sum().sort_values(ascending=False).to_string())
-print(f"\nQuantities suggested from the product name: {df['suggested_quantity'].notna().sum()} of {needs_quantity.sum()}")
-print("\nSaved: data/dq_report.csv")
+    # Suggest a weight in grams from the product name when the quantity is missing or implausible.
+    needs_quantity = issues["missing_quantity"] | issues["implausible_weight"]
+    df["suggested_quantity"] = df["product_name"].where(needs_quantity).map(extract_weight_g).astype("Int64")
+    return df, issues
+
+
+if __name__ == "__main__":
+    # Load the Royal Canin product data, check it and save the results.
+    products = pd.read_csv(DATA / "royal_canin_products.csv", dtype={"code": str},
+        sep=";", decimal=",", encoding="utf-8-sig")
+    df, issues = check(products, pd.Timestamp.now(tz="UTC"))
+    df.to_csv(DATA / "dq_report.csv", index=False, sep=";", decimal=",", encoding="utf-8-sig")  # French Excel format
+
+    # Summarize the overall results and counts for each quality rule.
+    needs_quantity = issues["missing_quantity"] | issues["implausible_weight"]
+    with_issue = df["issue_count"] > 0
+    print(f"Products checked: {len(df)}")
+    print(f"Products with at least one issue: {with_issue.sum()} ({with_issue.mean():.0%})")
+    print(f"Average completeness score: {df['completeness_score'].mean():.0f}%\n")
+    print("Issues by rule:")
+    print(issues.sum().sort_values(ascending=False).to_string())
+    print(f"\nQuantities suggested from the product name: {df['suggested_quantity'].notna().sum()} of {needs_quantity.sum()}")
+    print("\nSaved: data/dq_report.csv")

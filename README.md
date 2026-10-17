@@ -119,6 +119,15 @@ python dq_check.py         # quality rules  -> data/dq_report.csv
 python prepare_import.py   # Salesforce     -> data/salesforce_import.csv
 ```
 
+## Tests
+
+`tests/test_dq_check.py` checks every quality rule on small sample products (one clean product, then one defect at a
+time), the completeness score, and the weight extraction from product names.
+
+```bash
+python -m pytest
+```
+
 ## Limits
 
 - Open Pet Food Facts is collaborative: records are entered by contributors, not by Royal Canin.
