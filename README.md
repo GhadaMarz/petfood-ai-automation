@@ -128,6 +128,8 @@ time), the completeness score, and the weight extraction from product names.
 python -m pytest
 ```
 
+The tests also run on GitHub Actions at every push (`.github/workflows/tests.yml`).
+
 ## Limits
 
 - Open Pet Food Facts is collaborative: records are entered by contributors, not by Royal Canin.
