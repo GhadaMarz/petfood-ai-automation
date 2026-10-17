@@ -220,3 +220,7 @@ __marimo__/
 .streamlit/secrets.toml
 data/en.openpetfoodfacts*
 .DS_Store
+
+# Salesforce CLI local state
+.sf/
+.sfdx/
