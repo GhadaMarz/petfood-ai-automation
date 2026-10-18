@@ -1,0 +1,12 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Import Salesforce",
+            "detail": "Rebuild salesforce_import.csv and upsert it into petfood-dev on Barcode__c (no duplicates)",
+            "type": "shell",
+            "command": "scripts/import_salesforce.sh",
+            "problemMatcher": []
+        }
+    ]
+}

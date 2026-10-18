@@ -25,6 +25,7 @@ safely, and prepares a clean file for a Salesforce import.
 | `data/royal_canin_products.csv` | `profile_data.py` | Royal Canin perimeter, 13 columns + `match_reason` |
 | `data/dq_report.csv` | `dq_check.py` | Same products + `issues`, `issue_count`, `completeness_score`, `suggested_quantity`, `suggested_brand` |
 | `data/salesforce_import.csv` | `prepare_import.py` | Renamed fields, truncated texts, `YYYY-MM-DD` dates |
+| `data/salesforce_import_wizard.csv` | `prepare_import.py` | Same rows with field labels as headers, for the Data Import Wizard |
 
 The two working files use the French Excel format (`;` separator, decimal comma, UTF-8 with BOM) so they open
 directly in Excel. The Salesforce file uses the standard CSV format (`,` separator, decimal point, UTF-8) expected by
@@ -94,6 +95,12 @@ marked unique: running the import again updates existing records instead of crea
 ```bash
 scripts/import_salesforce.sh            # default org alias: petfood-dev
 ```
+
+In VS Code, the same import runs from **Terminal › Run Task › Import Salesforce**.
+
+To import through the Salesforce Data Import Wizard instead, use `data/salesforce_import_wizard.csv`: same rows, with
+field labels as headers ("Product Name"...), read from the metadata in `force-app/`, so the wizard maps every column
+by itself. Choose "Add new and update existing records", match by "Barcode (External ID)" and UTF-8 encoding.
 
 The object, its fields, tab, page layout and the "Pet Food Data Steward" permission set are Salesforce DX metadata in
 `force-app/`.

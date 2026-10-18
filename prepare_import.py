@@ -4,6 +4,7 @@ limits, converts numeric and date values, and excludes products without barcodes
 """
 
 from pathlib import Path
+import xml.etree.ElementTree as ET
 import pandas as pd
 
 # Load the data-quality report created by the previous processing step.
@@ -41,3 +42,20 @@ out = pd.DataFrame({
 # Export only products with barcodes and report the number of rows prepared.
 out.to_csv(DATA / "salesforce_import.csv", index=False)
 print(f"Rows ready for Salesforce: {len(out)}")
+
+
+def field_labels():
+    """API name -> label of every Pet_Food_Product__c field, read from the Salesforce DX metadata in force-app."""
+    tag = "{http://soap.sforce.com/2006/04/metadata}"
+    folder = Path(__file__).resolve().parent / "force-app/main/default/objects/Pet_Food_Product__c"
+    obj = ET.parse(folder / "Pet_Food_Product__c.object-meta.xml").getroot()
+    labels = {"Name": obj.find(f"{tag}nameField/{tag}label").text}
+    for path in (folder / "fields").glob("*.field-meta.xml"):
+        labels[path.name.removesuffix(".field-meta.xml")] = ET.parse(path).getroot().find(f"{tag}label").text
+    return labels
+
+
+# Same file with field labels as headers ("Product Name"...): the Data Import Wizard maps columns by label,
+# so it maps this file on its own instead of asking for the mapping at every import.
+out.rename(columns=field_labels()).to_csv(DATA / "salesforce_import_wizard.csv", index=False)
+print("Data Import Wizard file: data/salesforce_import_wizard.csv")
