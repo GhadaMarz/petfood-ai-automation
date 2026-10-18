@@ -2,7 +2,7 @@
 
 The API key is read from the ANTHROPIC_API_KEY environment variable, never from the code:
     export ANTHROPIC_API_KEY=...        (macOS / Linux)
-    python ai_quality_assistant.py
+    python src/ai_quality_assistant.py
 Run with --dry-run to see what would be sent to Claude without calling the API.
 """
 
@@ -15,7 +15,7 @@ from pathlib import Path
 import anthropic
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
 REPORTS = ROOT / "reports"
 

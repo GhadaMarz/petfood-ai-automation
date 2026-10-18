@@ -24,7 +24,7 @@ def extract_weight_g(name):
 
 
 # Fields used to calculate product completeness.
-DATA = Path(__file__).resolve().parent / "data"
+DATA = Path(__file__).resolve().parents[1] / "data"
 KEY_FIELDS = ["product_name", "categories", "ingredients_text", "quantity", "countries"]
 
 # Royal Canin GS1 prefixes trusted for brand suggestions (France, North America), as 13-digit GTINs.

@@ -3,7 +3,7 @@ import re
 import unicodedata
 import pandas as pd
 
-catalogue_path = (Path(__file__).resolve().parent / "data" / "en.openpetfoodfacts.org.products.csv")
+catalogue_path = (Path(__file__).resolve().parents[1] / "data" / "en.openpetfoodfacts.org.products.csv")
 
 # Load the tab-separated catalogue and keep mixed-type columns intact.
 catalogue = pd.read_csv(catalogue_path, sep="\t", low_memory=False, dtype={"code": str})
@@ -113,7 +113,7 @@ rc["match_reason"] = reasons
 cols = ["code", "product_name", "brands", "categories", "ingredients_text",
     "quantity", "product_quantity", "countries", "last_modified_datetime",
     "proteins_100g", "fat_100g", "completeness", "data_quality_errors_tags", "match_reason"]
-rc[cols].to_csv(Path(__file__).resolve().parent / "data" / "royal_canin_products.csv", index=False,
+rc[cols].to_csv(Path(__file__).resolve().parents[1] / "data" / "royal_canin_products.csv", index=False,
     sep=";", decimal=",", encoding="utf-8-sig")  # French Excel format
 print(f"\nRoyal Canin products saved: {len(rc)}")
 print(rc["match_reason"].str.split(":").str[0].value_counts().to_string())

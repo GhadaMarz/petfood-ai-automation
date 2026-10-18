@@ -10,7 +10,7 @@ cd "$(dirname "$0")/.."
 
 sf data query --target-org "$ORG" --result-format csv --output-file data/reviewed_barcodes.csv \
     --query "SELECT Barcode__c FROM Pet_Food_Product__c WHERE Review_Status__c IN ('Corrected', 'Validated')"
-python3 prepare_import.py
+python3 src/prepare_import.py
 sf data upsert bulk --sobject Pet_Food_Product__c --file data/salesforce_import.csv \
     --external-id Barcode__c --target-org "$ORG" --wait 10
 sf data query --query "SELECT COUNT() FROM Pet_Food_Product__c" --target-org "$ORG"

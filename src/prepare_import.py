@@ -7,7 +7,7 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 import pandas as pd
 
-DATA = Path(__file__).resolve().parent / "data"
+DATA = Path(__file__).resolve().parents[1] / "data"
 # Barcodes of records a data steward has already reviewed in Salesforce, exported just before an import.
 REVIEWED_BARCODES = DATA / "reviewed_barcodes.csv"
 # Fields a data steward decides on in Salesforce: an import must never overwrite them on reviewed records.
@@ -54,9 +54,9 @@ def protect_reviewed(out, reviewed_barcodes):
 
 
 def field_labels():
-    """API name -> label of every Pet_Food_Product__c field, read from the Salesforce DX metadata in force-app."""
+    """API name -> label of every Pet_Food_Product__c field, read from the Salesforce DX metadata in salesforce/force-app."""
     tag = "{http://soap.sforce.com/2006/04/metadata}"
-    folder = Path(__file__).resolve().parent / "force-app/main/default/objects/Pet_Food_Product__c"
+    folder = Path(__file__).resolve().parents[1] / "salesforce/force-app/main/default/objects/Pet_Food_Product__c"
     obj = ET.parse(folder / "Pet_Food_Product__c.object-meta.xml").getroot()
     labels = {"Name": obj.find(f"{tag}nameField/{tag}label").text}
     for path in (folder / "fields").glob("*.field-meta.xml"):
