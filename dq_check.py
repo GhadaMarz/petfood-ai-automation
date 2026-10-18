@@ -27,6 +27,31 @@ def extract_weight_g(name):
 DATA = Path(__file__).resolve().parent / "data"
 KEY_FIELDS = ["product_name", "categories", "ingredients_text", "quantity", "countries"]
 
+# Royal Canin GS1 prefixes trusted for brand suggestions (France, North America), as 13-digit GTINs.
+RC_BARCODE_PREFIXES = ("3182550", "0030111")
+# Brand values that name a product type rather than a manufacturer.
+GENERIC_BRANDS = {"dog food", "cat food"}
+
+
+def normalized_brand(brands):
+    """Lower case, single spaces, no leading or trailing spaces; empty string when the brand is missing."""
+    return brands.fillna("").str.replace(r"\s+", " ", regex=True).str.strip().str.lower()
+
+
+def has_rc_barcode(codes):
+    # Pad 12-digit UPC codes to 13-digit GTINs so the North American prefix compares like the French one.
+    codes = codes.fillna("")
+    return codes.where(codes.str.len() != 12, "0" + codes).str.startswith(RC_BARCODE_PREFIXES)
+
+
+def suggest_brand(df):
+    """"Royal Canin" when the brand only differs by case or spaces, or when it is empty or generic on a
+    Royal Canin barcode; empty otherwise, so that ambiguous brands and other manufacturers stay in manual review."""
+    brand = normalized_brand(df["brands"])
+    case_variant = (brand == "royal canin") & (df["brands"] != "Royal Canin")
+    blank_on_rc_barcode = (brand.eq("") | brand.isin(GENERIC_BRANDS)) & has_rc_barcode(df["code"])
+    return pd.Series("", index=df.index).where(~(case_variant | blank_on_rc_barcode), "Royal Canin")
+
 
 def evaluate_rules(df, today):
     """Return one boolean column per data-quality rule, True when the product has the defect."""
@@ -36,6 +61,8 @@ def evaluate_rules(df, today):
     fat = pd.to_numeric(df["fat_100g"], errors="coerce")
     modified = pd.to_datetime(df["last_modified_datetime"], errors="coerce", utc=True)
     code = df["code"].fillna("")
+    brand = normalized_brand(df["brands"])
+    other_manufacturer = brand.ne("") & ~brand.isin(GENERIC_BRANDS) & ~brand.str.contains("royal|canin")
 
     return pd.DataFrame({
         "missing_name": df["product_name"].isna(),
@@ -49,7 +76,8 @@ def evaluate_rules(df, today):
         "duplicate_barcode": code.duplicated(keep=False) & (code != ""),
         "non_standard_brand": df["brands"].str.strip() != "Royal Canin",
         "stale_record": modified < today - pd.DateOffset(years=3),
-        "missing_brand": df["brands"].isna()
+        "missing_brand": df["brands"].isna(),
+        "brand_barcode_conflict": has_rc_barcode(df["code"]) & other_manufacturer,
     })
 
 
@@ -64,6 +92,7 @@ def check(df, today):
     # Suggest a weight in grams from the product name when the quantity is missing or implausible.
     needs_quantity = issues["missing_quantity"] | issues["implausible_weight"]
     df["suggested_quantity"] = df["product_name"].where(needs_quantity).map(extract_weight_g).astype("Int64")
+    df["suggested_brand"] = suggest_brand(df)
     return df, issues
 
 
@@ -83,4 +112,5 @@ if __name__ == "__main__":
     print("Issues by rule:")
     print(issues.sum().sort_values(ascending=False).to_string())
     print(f"\nQuantities suggested from the product name: {df['suggested_quantity'].notna().sum()} of {needs_quantity.sum()}")
+    print(f"Brands suggested: {(df['suggested_brand'] != '').sum()}")
     print("\nSaved: data/dq_report.csv")

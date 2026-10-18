@@ -23,7 +23,7 @@ safely, and prepares a clean file for a Salesforce import.
 | File | Produced by | Content |
 |---|---|---|
 | `data/royal_canin_products.csv` | `profile_data.py` | Royal Canin perimeter, 13 columns + `match_reason` |
-| `data/dq_report.csv` | `dq_check.py` | Same products + `issues`, `issue_count`, `completeness_score`, `suggested_quantity` |
+| `data/dq_report.csv` | `dq_check.py` | Same products + `issues`, `issue_count`, `completeness_score`, `suggested_quantity`, `suggested_brand` |
 | `data/salesforce_import.csv` | `prepare_import.py` | Renamed fields, truncated texts, `YYYY-MM-DD` dates |
 
 The two working files use the French Excel format (`;` separator, decimal comma, UTF-8 with BOM) so they open
@@ -71,11 +71,16 @@ justified and doubtful cases reviewed.
 | `non_standard_brand` | Brand not written exactly "Royal Canin" |
 | `stale_record` | Not updated for more than 3 years |
 | `missing_brand` | Empty brand |
+| `brand_barcode_conflict` | Royal Canin barcode prefix but another manufacturer's brand (e.g. Brekkies) |
 
 The **completeness score** is the share of 5 key fields filled in: name, category, ingredients, quantity, country.
 
 When the quantity is missing or implausible, `suggested_quantity` proposes a weight in grams read from the product
 name: "PERSIAN 4KG" → 4000, "1,5kg" → 1500, "15 KG+3KG" (bonus bag) → 18000, "12X85G" (multipack) → 1020.
+
+`suggested_brand` proposes "Royal Canin" only in safe cases: the brand differs only by case or spaces
+("ROYAL CANIN"), or it is empty or generic ("Dog Food", "Cat Food") on a `3182550` or `0030111` barcode. Ambiguous
+brands and other manufacturers get no suggestion and stay in manual review.
 
 ### 3. Salesforce file (`prepare_import.py`)
 
@@ -124,6 +129,7 @@ python ai_quality_assistant.py --language English
 | Products with at least one defect | 500 (97 %) |
 | Average completeness score | 61 % |
 | Weights suggested from the product name | 58 of 209 products with a missing or implausible quantity |
+| Brands suggested ("Royal Canin") | 250 |
 
 | Rule | Products |
 |---|---|
@@ -136,7 +142,7 @@ python ai_quality_assistant.py --language English
 | `missing_name` | 58 |
 | `implausible_weight` | 41 |
 | `invalid_barcode` | 6 |
-| `implausible_protein`, `implausible_fat`, `duplicate_barcode` | 0 |
+| `implausible_protein`, `implausible_fat`, `duplicate_barcode`, `brand_barcode_conflict` | 0 |
 
 `stale_record` depends on the day the script runs, so its count grows over time.
 
@@ -158,7 +164,7 @@ python ai_quality_assistant.py  # Claude API -> data/brand_suggestions.csv, repo
 ## Tests
 
 `tests/test_dq_check.py` checks every quality rule on small sample products (one clean product, then one defect at a
-time), the completeness score, and the weight extraction from product names.
+time), the completeness score, the weight extraction from product names and the brand suggestions.
 
 ```bash
 python -m pytest

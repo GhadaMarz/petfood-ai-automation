@@ -23,6 +23,7 @@ out = pd.DataFrame({
     "Barcode__c": df["code"],
     "Product_Name__c": txt("product_name", 255),
     "Brand__c": txt("brands", 255),
+    "Suggested_Brand__c": txt("suggested_brand", 255),
     "Categories__c": txt("categories", 1000),
     "Ingredients__c": txt("ingredients_text", 5000),
     "Quantity__c": txt("quantity", 255),

@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from dq_check import check, evaluate_rules, extract_weight_g
+from dq_check import check, evaluate_rules, extract_weight_g, suggest_brand
 
 TODAY = pd.Timestamp("2026-10-17", tz="UTC")
 
@@ -63,6 +63,43 @@ def test_each_rule_flags_only_its_defect(override, rule):
 
 def test_empty_brand_is_missing_and_non_standard():
     assert failed_rules({"brands": None}) == {"missing_brand", "non_standard_brand"}
+
+
+@pytest.mark.parametrize("brand, code, conflict", [
+    ("Brekkies", "3182550011600", True),
+    ("Affinity, Brekkies", "0030111428271", True),
+    ("Brekkies", "8410650151090", False),
+    ("Dog Food", "3182550928663", False),
+    ("Royal Canin Veterinary", "3182550702379", False),
+    (None, "3182550702379", False),
+])
+def test_other_manufacturer_on_royal_canin_barcode_is_a_conflict(brand, code, conflict):
+    assert ("brand_barcode_conflict" in failed_rules({"brands": brand, "code": code})) == conflict
+
+
+@pytest.mark.parametrize("brand, code, suggestion", [
+    ("royal canin", "8896111214908", "Royal Canin"),
+    ("ROYAL  CANIN ", "8896111214908", "Royal Canin"),
+    (None, "3182550702379", "Royal Canin"),
+    (None, "0030111428271", "Royal Canin"),
+    (None, "030111428271", "Royal Canin"),
+    ("Dog Food", "3182550928663", "Royal Canin"),
+    ("Cat Food", "0030111428271", "Royal Canin"),
+    ("Royal Canin", "3182550702379", ""),
+    (None, "9003579311479", ""),
+    ("Dog Food", "8896111214908", ""),
+    ("Royal Canin Veterinary", "3182550702379", ""),
+    ("Toyal Canin", "3182550702379", ""),
+    ("Brekkies", "3182550011600", ""),
+])
+def test_suggested_brand_only_for_safe_cases(brand, code, suggestion):
+    assert suggest_brand(products({"brands": brand, "code": code})).iloc[0] == suggestion
+
+
+def test_check_adds_suggested_brand_without_changing_brand():
+    df, _ = check(products({"brands": "ROYAL CANIN"}), TODAY)
+    assert df.loc[0, "brands"] == "ROYAL CANIN"
+    assert df.loc[0, "suggested_brand"] == "Royal Canin"
 
 
 def test_text_quantity_alone_is_not_missing():
