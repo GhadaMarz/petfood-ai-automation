@@ -227,3 +227,6 @@ data/en.openpetfoodfacts*
 
 # Personal project notes (Word, PDF): kept out of the public repository
 Documentation/
+
+# Exported from Salesforce before each import
+data/reviewed_barcodes.csv

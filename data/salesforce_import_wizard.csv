@@ -468,7 +468,7 @@ Barcode,Barcode (External ID),Product Name,Brand,Suggested Brand,Categories,Ingr
 9003579007129,9003579007129,kitten sterilised sauce,royal canin,Royal Canin,,,12x85 g,1020,,en:fr,2026-01-16,,,60,3,"missing_category, missing_ingredients, non_standard_brand"
 9003579008201,9003579008201,puppy mini,royal canin,Royal Canin,,,12x85gr,1020,,en:Belgium,2026-01-16,,,60,3,"missing_category, missing_ingredients, non_standard_brand"
 9003579008218,9003579008218,Royal canin pouch PUPPY mini 85 gr,,,"Non-food-products, en:open-pet-food-facts",10238620,11,0,85,en:ch,2025-05-04,,,100,3,"implausible_weight, non_standard_brand, missing_brand"
-9003579008249,9003579008249,mini adult,royal canin,Royal Canin,,,12x85gr,1020,,en:be,2026-01-16,,,60,3,"missing_category, missing_ingredients, non_standard_brand"
+9003579008249,9003579008249,mini adult,,,,,12x85gr,1020,,en:be,2026-01-16,,,60,3,"missing_category, missing_ingredients, non_standard_brand"
 9003579008256,9003579008256,ROYAL CANIN POUCH Mini adult,Royal canin,Royal Canin,en:open-pet-food-facts,10238621,85g,85,,en:es,2026-03-23,,,100,1,non_standard_brand
 9003579008331,9003579008331,,Royal canin,Royal Canin,"en:open-pet-food-facts,Nourriture pour chiens",,140g,140,,France,2026-03-23,,,60,3,"missing_name, missing_ingredients, non_standard_brand"
 9003579008379,9003579008379,RoyalCanin pouch medium adult,,,en:pet-food,10238623,140g,140,,en:indonesia,2026-02-04,,,100,2,"non_standard_brand, missing_brand"

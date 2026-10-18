@@ -92,6 +92,11 @@ without a barcode.
 `scripts/import_salesforce.sh` rebuilds this file and **upserts** it into the org on `Barcode__c`, an external ID
 marked unique: running the import again updates existing records instead of creating duplicates.
 
+Before each import, the script exports the barcodes of records already reviewed in Salesforce ("Corrected" or
+"Validated"). For those records, `Brand__c` and `Suggested_Brand__c` are left empty in the file, and an upsert ignores
+empty cells: a brand accepted by a data steward is never reverted by a later import, while every other field is still
+refreshed. This protection needs the script; the Data Import Wizard cannot query Salesforce before an import.
+
 ```bash
 scripts/import_salesforce.sh            # default org alias: petfood-dev
 ```
@@ -194,5 +199,3 @@ The tests also run on GitHub Actions at every push (`.github/workflows/tests.yml
 
 - Open Pet Food Facts is collaborative: records are entered by contributors, not by Royal Canin.
 - The GS1 prefixes were inferred from the data and still need confirming in the GS1 registry (GEPIR).
-- A new import overwrites `Brand__c` and `Suggested_Brand__c`: brands accepted in Salesforce would be reverted
-  while the record stays "Corrected". Corrections must be protected before the next import.
