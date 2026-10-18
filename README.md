@@ -126,6 +126,17 @@ python ai_quality_assistant.py               # brand suggestions + report in Fre
 python ai_quality_assistant.py --language English
 ```
 
+### 5. Brand suggestion review in Salesforce
+
+Suggestions are never applied to the data automatically. On each Pet Food Product record, an **Accept Brand
+Suggestion** button starts a screen flow that:
+
+1. reads the record and stops without any change if `Suggested_Brand__c` is empty;
+2. shows the current brand and the suggested brand, and asks the data steward to confirm;
+3. copies the suggestion into `Brand__c`, sets `Review_Status__c` to "Corrected" and clears `Suggested_Brand__c`.
+
+The flow and the button were built in the Salesforce org (Flow Builder) and are not yet stored in `force-app/`.
+
 ## Results (October 2026)
 
 | Indicator | Value |
@@ -183,3 +194,5 @@ The tests also run on GitHub Actions at every push (`.github/workflows/tests.yml
 
 - Open Pet Food Facts is collaborative: records are entered by contributors, not by Royal Canin.
 - The GS1 prefixes were inferred from the data and still need confirming in the GS1 registry (GEPIR).
+- A new import overwrites `Brand__c` and `Suggested_Brand__c`: brands accepted in Salesforce would be reverted
+  while the record stays "Corrected". Corrections must be protected before the next import.
