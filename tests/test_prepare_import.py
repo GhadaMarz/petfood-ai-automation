@@ -25,11 +25,12 @@ def test_products_without_barcode_are_dropped():
     assert len(build_import(report({}, {"code": None}))) == 1
 
 
-def test_reviewed_records_keep_their_brand_fields():
+def test_reviewed_records_keep_their_brand_and_weight():
     out = protect_reviewed(build_import(report({"code": "3182550000001"}, {"code": "3182550000002"})),
                            ["3182550000002"])
     reviewed, to_review = out.set_index("Barcode__c").loc["3182550000002"], out.set_index("Barcode__c").loc["3182550000001"]
-    assert reviewed["Brand__c"] == reviewed["Suggested_Brand__c"] == ""
+    assert reviewed[["Brand__c", "Suggested_Brand__c", "Weight_g__c", "Suggested_Weight_g__c"]].isna().all()
     assert reviewed["Issue_Count__c"] == 1
     assert to_review["Brand__c"] == "royal canin"
     assert to_review["Suggested_Brand__c"] == "Royal Canin"
+    assert to_review["Weight_g__c"] == 4000

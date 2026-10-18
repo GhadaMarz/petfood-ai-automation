@@ -11,7 +11,7 @@ DATA = Path(__file__).resolve().parents[1] / "data"
 # Barcodes of records a data steward has already reviewed in Salesforce, exported just before an import.
 REVIEWED_BARCODES = DATA / "reviewed_barcodes.csv"
 # Fields a data steward decides on in Salesforce: an import must never overwrite them on reviewed records.
-STEWARD_FIELDS = ["Brand__c", "Suggested_Brand__c"]
+STEWARD_FIELDS = ["Brand__c", "Suggested_Brand__c", "Weight_g__c", "Suggested_Weight_g__c"]
 
 
 def build_import(df):
@@ -46,10 +46,10 @@ def build_import(df):
 
 
 def protect_reviewed(out, reviewed_barcodes):
-    """Blank the steward fields of already reviewed records. An upsert ignores empty cells, so the brand a data
-    steward accepted in Salesforce is kept, while every other field is still refreshed."""
+    """Blank the steward fields of already reviewed records. An upsert ignores empty cells, so the brand and weight a
+    data steward decided on in Salesforce are kept, while every other field is still refreshed."""
     out = out.copy()
-    out.loc[out["Barcode__c"].isin(set(reviewed_barcodes)), STEWARD_FIELDS] = ""
+    out.loc[out["Barcode__c"].isin(set(reviewed_barcodes)), STEWARD_FIELDS] = pd.NA
     return out
 
 
@@ -71,7 +71,7 @@ if __name__ == "__main__":
     if REVIEWED_BARCODES.exists():
         reviewed = pd.read_csv(REVIEWED_BARCODES, dtype=str)["Barcode__c"].dropna()
         out = protect_reviewed(out, reviewed)
-        print(f"Reviewed records protected (brand fields left unchanged): {out['Barcode__c'].isin(set(reviewed)).sum()}")
+        print(f"Reviewed records protected (brand and weight left unchanged): {out['Barcode__c'].isin(set(reviewed)).sum()}")
     else:
         print("No reviewed_barcodes.csv: brand fields of reviewed records are NOT protected")
 
