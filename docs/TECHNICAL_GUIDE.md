@@ -13,15 +13,15 @@ Functional choices (why each rule exists, which trade-offs were made) are kept i
 ```
                        ┌──────────────────────────── Python pipeline (src/) ────────────────────────────┐
 Open Pet Food Facts ──►│ profile_data.py ──► dq_check.py ──► prepare_import.py ──► salesforce_import.csv │
-  raw CSV export       │  perimeter         13 rules,         Salesforce format,                         │
+  raw CSV export       │  perimeter         14 rules,         Salesforce format,                         │
   (15,136 products)    │  (515 products)    suggestions       reviewed records protected                 │
                        └──────────────────────────────────────────────┬─────────────────────────────────┘
                                                                       │ scripts/import_salesforce.sh
                                                                       ▼ (Bulk API upsert on Barcode__c)
  ai_quality_assistant.py ──► Claude API              Salesforce org "petfood-dev"
- (brand suggestions, report)                         Pet_Food_Product__c + Accept Brand Suggestion flow
+ (brand suggestions, report)                         Pet_Food_Product__c + Accept Suggestions flow
 
- tests/ (pytest, 61 tests) ──► GitHub Actions at every push
+ tests/ (pytest, 98 tests) ──► GitHub Actions at every push
 ```
 
 | Layer | Technology | Role |
@@ -49,9 +49,9 @@ petfood-ai-automation/
 │   ├── prepare_import.py         Step 3: Salesforce import files, protection of reviewed records
 │   └── ai_quality_assistant.py   Optional: Claude API brand suggestions and quality report
 ├── tests/
-│   ├── test_dq_check.py          Quality rules, weight extraction, brand suggestion (53 tests)
-│   ├── test_prepare_import.py    Import format and protection of reviewed records (3 tests)
-│   └── test_ai_quality_assistant.py  AI assistant inputs and response handling, no API call (5 tests)
+│   ├── test_dq_check.py          Quality rules, weight extraction, brand and country standardization and suggestion (83 tests)
+│   ├── test_prepare_import.py    Import format, cleared fields, protection of reviewed records (9 tests)
+│   └── test_ai_quality_assistant.py  AI assistant inputs and response handling, no API call (6 tests)
 ├── data/
 │   ├── en.openpetfoodfacts.org.products.csv   Raw export (downloaded, not versioned, ~38 MB)
 │   ├── royal_canin_products.csv  Output of step 1
@@ -65,12 +65,13 @@ petfood-ai-automation/
 │   ├── sfdx-project.json         Project definition (package directory, API version 68.0)
 │   ├── .forceignore              Files the CLI must not deploy
 │   └── force-app/main/default/
-│       ├── objects/Pet_Food_Product__c/   Object definition and 17 custom fields
-│       ├── layouts/              Page layout (sections and Accept Brand Suggestion button)
+│       ├── objects/Pet_Food_Product__c/   Object definition, 18 custom fields, list view button
+│       ├── layouts/              Page layout (sections and Accept Suggestions button)
 │       ├── tabs/                 "Pet Food Products" tab
 │       ├── permissionsets/       "Pet Food Data Steward" permission set
-│       ├── flows/                Accept_Brand_Suggestion screen flow
-│       └── quickActions/         Button that launches the flow on a record
+│       ├── flows/                Accept_Suggestions (one record) and Bulk_Accept_Suggestions (list) screen flows
+│       ├── lwc/suggestionReviewTable/  Full-height table used by Bulk_Accept_Suggestions
+│       └── quickActions/         Button that launches Accept_Suggestions on a record
 ├── docs/
 │   └── TECHNICAL_GUIDE.md        This guide
 ├── .github/workflows/tests.yml   CI: install dependencies and run pytest
@@ -212,35 +213,60 @@ python src/prepare_import.py
 ### 6.2 `src/dq_check.py` – quality rules and suggestions
 
 - **Functions:** `evaluate_rules(df, today)` returns one boolean column per rule; `check(df, today)` adds the result
-  columns; `extract_weight_g(name)` and `suggest_brand(df)` compute the suggestions. The script part runs only under
+  columns; `standardize_brand(brands)` fixes the obvious brand variants; `standardize_countries(value)` returns the
+  standardized countries and the countries suggestion; `extract_weight_g(name)` and
+  `suggest_brand(df)` compute the suggestions. The script part runs only under
   `if __name__ == "__main__":`, so the functions can be imported by the tests.
 - **Rules:** `missing_name`, `missing_category`, `missing_ingredients`, `missing_quantity` (text and numeric quantity
   both empty), `implausible_weight` (≤ 0 g or > 20,000 g), `implausible_protein` (outside 0–60 %), `implausible_fat`
-  (outside 0–40 %), `invalid_barcode` (not 8, 12, 13 or 14 digits), `duplicate_barcode`, `non_standard_brand` (not
-  exactly "Royal Canin"), `stale_record` (last modified more than 3 years ago), `missing_brand`,
-  `brand_barcode_conflict` (barcode prefix 3182550 or 0030111 with another manufacturer's brand).
+  (outside 0–40 %), `invalid_barcode` (not 8, 12, 13 or 14 digits), `duplicate_barcode`, `brand_invalid_value` (a
+  brand that is filled in and still not "Royal Canin" after standardization, e.g. "Royal", "Toyal Canin"), `stale_record` (last modified more than 3 years ago), `missing_brand`,
+  `brand_barcode_conflict` (barcode prefix 3182550 or 0030111 with another manufacturer's brand),
+  `country_invalid_value` (a countries value holding anything else than a country name: a code, a region, an unknown
+  value; 44 records).
 - **Completeness score:** share of the 5 `KEY_FIELDS` filled in (name, categories, ingredients, quantity, countries),
   0–100.
 - **`suggested_quantity`:** only when `missing_quantity` or `implausible_weight` is true. The `WEIGHT` regular
   expression reads kg / g / gr / lb / lbs / oz, decimal commas, bonus bags (`15 KG+3KG`, `12+2 KG`, added up) and
   multipacks (`12X85G`).
-- **`suggested_brand`:** "Royal Canin" when the brand only differs by case or spaces, or when it is empty or generic
-  (`GENERIC_BRANDS = {"dog food", "cat food"}`) on a 3182550 or 0030111 barcode; empty otherwise.
+- **Automatic brand standardization:** a brand that only differs from "Royal Canin" by case or spaces ("royal canin",
+  "ROYAL  CANIN") becomes "Royal Canin" in `standardized_brand`; `brand_auto_corrected` flags those records (124). The
+  original value stays in `brands`. Brand rules are evaluated on the standardized brand, so a fixed variant is not a
+  defect. Symbols, typos and other words ("ROYAL-CANIN", "Toyal Canin", "Royal") are not changed.
+- **`suggested_brand`:** "Royal Canin" when the brand is empty or generic (`GENERIC_BRANDS = {"dog food", "cat food"}`)
+  on a 3182550 or 0030111 barcode (126 records); empty otherwise.
+- **Countries:** each comma-separated value is read with `country_key()` (lower case, "en:" prefix, accents and
+  hyphens removed). A country name in English, French, Spanish, Portuguese or Russian (`COUNTRY_NAMES`: "en:france",
+  "Francia", "Россия", "Allemagne", "España") is rewritten as its English name in `standardized_countries`, duplicates
+  removed (227 records, flagged by `countries_auto_corrected`). Codes, abbreviations and regions (`COUNTRY_CODES`:
+  "en:fr", "USA", "gironde") are only resolved in `suggested_countries`, the full value as it would be after
+  acceptance (44 records). Unknown values are left unchanged. The original value stays in `countries`.
 - **Output:** `data/dq_report.csv` = input columns + `issues`, `issue_count`, `completeness_score`,
-  `suggested_quantity`, `suggested_brand`.
+  `suggested_quantity`, `suggested_brand`, `standardized_brand`, `brand_auto_corrected`, `standardized_countries`,
+  `suggested_countries`, `countries_auto_corrected`.
 
 ### 6.3 `src/prepare_import.py` – Salesforce import files
 
 - `build_import(df)` maps the report to the API names of `Pet_Food_Product__c`, truncates texts to the field lengths,
   rounds numbers to the field decimals (`Int64` for whole numbers), formats dates as `YYYY-MM-DD` and drops products
-  without a barcode. `Name` and `Barcode__c` both receive the barcode.
-- `protect_reviewed(out, barcodes)` empties `Brand__c` and `Suggested_Brand__c` for records listed in
-  `data/reviewed_barcodes.csv`. A Bulk API upsert ignores empty cells (only `#N/A` would clear a field), so decisions
-  taken in Salesforce are kept while the other fields are refreshed. Without that file, the script prints a warning.
+  without a barcode. `Name` and `Barcode__c` both receive the barcode; `Brand__c` and `Countries__c` receive the
+  standardized values, `Suggested_Countries__c` the countries suggestion.
+- `clear_empty_fields(out)` writes `#N/A` in every empty cell except the keys. In a Bulk API upsert an empty cell leaves
+  the field unchanged and `#N/A` clears it, so Salesforce mirrors the pipeline: a suggestion made unnecessary or a
+  defect that disappeared is removed instead of staying.
+- `protect_reviewed(out, reviewed)` reads `data/reviewed_barcodes.csv` (barcode, review status and countries of the
+  records reviewed in Salesforce) and keeps the data steward's decisions while the other fields are refreshed:
+  - Corrected or Validated: `Brand__c`, `Suggested_Brand__c`, `Weight_g__c` and `Suggested_Weight_g__c` left empty,
+    therefore unchanged;
+  - Validated (suggestions rejected): `Countries__c` and `Suggested_Countries__c` left empty too;
+  - Corrected: the countries are standardized from their Salesforce value instead of the source value. A country
+    accepted in Salesforce is already a name and stays as it is; a country never reviewed (the record was corrected
+    for its brand or weight) is still standardized or suggested.
+  Without that file, the script prints a warning.
 - `field_labels()` reads each field label from `salesforce/force-app/.../Pet_Food_Product__c` so that the wizard file
   always matches the object.
 - **Outputs:** `data/salesforce_import.csv` (API names as headers) and `data/salesforce_import_wizard.csv` (labels as
-  headers).
+  headers, no `#N/A`: the wizard cannot clear a field and would store the text).
 
 ### 6.4 File formats
 
@@ -269,6 +295,7 @@ and search enabled. Standard `Name` field labelled "Barcode" (Text).
 | `Suggested_Brand__c` | Suggested Brand | Text(255) |
 | `Quantity__c` | Quantity | Text(255) |
 | `Countries__c` | Countries | Text(255) |
+| `Suggested_Countries__c` | Suggested Countries | Text(255) |
 | `Categories__c` | Categories | Long Text Area(1000) |
 | `DQ_Issues__c` | DQ Issues | Long Text Area(1000) |
 | `Ingredients__c` | Ingredients | Long Text Area(5000) |
@@ -285,17 +312,45 @@ Other components in `salesforce/force-app/main/default/`:
 
 - **Tab** `Pet_Food_Product__c` (icon `Custom18: Form`).
 - **Page layout** "Pet Food Product Layout": sections Product, Data Quality, Details, System Information; the record
-  actions start with the Accept Brand Suggestion button.
+  actions start with the Accept Suggestions button.
 - **Permission set** `Pet_Food_Data_Steward`: read, create and edit on the object (no delete), read and edit on every
   custom field, tab visible.
-- **Screen flow** `Accept_Brand_Suggestion` (input variable `recordId`): Get Records `Get_Product` → Decision
-  `Has_Suggestion` (Suggested Brand not null) → Screen `Confirm` (current brand and suggested brand) → Update Records
-  `Apply_Suggestion` (Brand ← Suggested Brand, Review Status ← "Corrected", Suggested Brand ← empty). Without a
-  suggestion, the flow ends without any change.
-- **Quick action** `Pet_Food_Product__c.Accept_Brand_Suggestion` (type Flow): the button on the record page.
+- **Screen flow** `Accept_Suggestions` (input variable `recordId`), launched by the record button:
+  1. Get Records `Get_Product`, then Decision `Has_Any_Suggestion` (Suggested Brand, Weight or Countries not null);
+     without any suggestion, screen `No_Suggestion` and no change.
+  2. Screen `Review`: formulas `BrandLine`, `WeightLine` and `CountryLine` show "current → suggested" (or "no suggestion"), and a
+     required radio button `Decision`: "Accept the suggestions" (`accept`, default) or "Reject them and keep the
+     current values" (`reject`).
+  3. Accept: Update Records `Apply_Brand` (Brand ← Suggested Brand, Suggested Brand cleared) if a brand is suggested,
+     `Apply_Weight` (Weight ← Suggested Weight, Suggested Weight cleared) if a weight is suggested, `Apply_Countries`
+     (Countries ← Suggested Countries, suggestion cleared) if countries are suggested, then `Mark_Corrected` (Review
+     Status ← "Corrected").
+  4. Reject: `Reject_Suggestions` clears the three suggestions and sets Review Status to "Validated".
+  5. Screen `Done`.
+- **Quick action** `Pet_Food_Product__c.Accept_Suggestions` (type Flow): the button on the record page.
+- **Screen flow** `Bulk_Accept_Suggestions` (no input), launched by the list view button:
+  1. Get Records `Get_Products`: every record whose Suggested Brand, Weight or Countries is not null, sorted by barcode;
+     without any, screen `No_Suggestion`.
+  2. Screen `Select_Changes`: the Lightning Web Component `suggestionReviewTable` (input `records`, output
+     `selectedRecords`) shows barcode, product name, brand, suggested brand, weight, suggested weight, countries and
+     suggested countries, with a search box and a "checked" counter. Every row starts checked; the data steward
+     unchecks the rows to leave unchanged, then clicks Accept. Rows hidden by a search keep their state. The standard
+     Data Table (`flowruntime:datatable`) was replaced because its height is fixed (internal scroll, about 7 rows
+     visible) and no input attribute changes it; the component has no height limit and wraps long texts.
+  3. Loop `Each_Product` over `selectedRecords`; Assignment `Accept_Row` sets Brand ← `NewBrand` (suggested brand, or
+     the current one if none), Weight ← `NewWeight` and Countries ← `NewCountries` (same logic), clears the suggestions, sets Review Status to
+     "Corrected", adds the row to `ProductsToUpdate` and counts it in `AcceptedCount`.
+  4. Update Records `Update_Products` saves the collection in one operation (skipped if no row is selected);
+     unchecked rows are not modified. Screen `Done` shows the number of products updated.
+- **List view button** `Bulk_Accept_Suggestions` (web link, label "Accept Suggestions", type list button, URL
+  `/flow/Bulk_Accept_Suggestions?retURL=/lightning/o/Pet_Food_Product__c/list`): added to every list view through
+  `searchLayouts/listViewButtons` in the object file. The flow opens as a full page and returns to the list at the end:
+  a web link of type flow (modal window) cannot be created through the Metadata API.
+- **Former flow** `Accept_Brand_Suggestion` and its quick action (the first version, brand only, built in Flow
+  Builder) were deleted from the org and the project on 19 October 2026.
 
-The object, fields, tab, layout and permission set were written as metadata files and deployed with the CLI; the flow
-and the quick action were built in Flow Builder and Setup, then retrieved into the project.
+The object, fields, tab, layout, permission set, both flows, the table component and the buttons are written as metadata files and deployed
+with the CLI.
 
 ### 7.2 Deploying the metadata
 
@@ -327,8 +382,9 @@ Bring changes made in the org (Flow Builder, Setup) back into the project before
 
 ```bash
 sf project retrieve start --target-org petfood-dev \
-    --metadata "Flow:Accept_Brand_Suggestion" \
-    --metadata "QuickAction:Pet_Food_Product__c.Accept_Brand_Suggestion" \
+    --metadata "Flow:Accept_Suggestions" \
+    --metadata "Flow:Bulk_Accept_Suggestions" \
+    --metadata "QuickAction:Pet_Food_Product__c.Accept_Suggestions" \
     --metadata "Layout:Pet_Food_Product__c-Pet Food Product Layout"
 ```
 
@@ -348,14 +404,16 @@ It runs four commands:
 
 ```bash
 sf data query --target-org petfood-dev --result-format csv --output-file data/reviewed_barcodes.csv \
-    --query "SELECT Barcode__c FROM Pet_Food_Product__c WHERE Review_Status__c IN ('Corrected', 'Validated')"
+    --query "SELECT Barcode__c, Review_Status__c, Countries__c FROM Pet_Food_Product__c WHERE Review_Status__c IN ('Corrected', 'Validated')"
 python3 src/prepare_import.py
 sf data upsert bulk --sobject Pet_Food_Product__c --file data/salesforce_import.csv \
     --external-id Barcode__c --target-org petfood-dev --wait 10
 sf data query --query "SELECT COUNT() FROM Pet_Food_Product__c" --target-org petfood-dev
 ```
 
-Running it twice leaves the same number of records (515): the upsert updates the records found by `Barcode__c` and
+Every empty value is sent as `#N/A`, so a field that became empty in the pipeline is cleared in Salesforce too;
+reviewed records keep their brand and weight, and their countries as described in 6.3. Running it twice leaves the same number of records (515): the upsert
+updates the records found by `Barcode__c` and
 creates only the missing ones.
 
 **Alternative: Data Import Wizard** (Setup › Data Import Wizard › Custom objects › Pet Food Products), with
@@ -369,7 +427,7 @@ creates only the missing ones.
 | Values separated by | Comma |
 | Mapping | Automatic (headers are the field labels); `Barcode` → Name, `Barcode (External ID)` → Barcode__c |
 
-The wizard cannot protect reviewed records: run `scripts/import_salesforce.sh` once beforehand, or prefer the script.
+The wizard cannot protect reviewed records nor clear a field that became empty: prefer the script.
 
 ### 7.4 Data commands
 
@@ -382,6 +440,10 @@ sf data query --target-org petfood-dev --query "SELECT Review_Status__c, COUNT(I
 sf data query --target-org petfood-dev --query "SELECT Id FROM Pet_Food_Product__c" \
     --result-format csv --output-file /tmp/pet_food_ids.csv
 sf data delete bulk --sobject Pet_Food_Product__c --file /tmp/pet_food_ids.csv --target-org petfood-dev --wait 10
+
+# Export every record (no 500-row limit, Long Text Areas included) to check the org against the import file
+sf data export bulk --target-org petfood-dev --result-format csv --output-file /tmp/org_export.csv --wait 10 \
+    --query "SELECT Barcode__c, Brand__c, Suggested_Brand__c, Review_Status__c, DQ_Issues__c FROM Pet_Food_Product__c"
 
 # List the Bulk API jobs run on the org
 sf api request rest "/services/data/v68.0/jobs/ingest" --target-org petfood-dev
@@ -414,7 +476,7 @@ python src/ai_quality_assistant.py --language English
 ## 9. Tests and continuous integration
 
 ```bash
-python -m pytest              # 61 tests, one dot per passing test
+python -m pytest              # 98 tests, one dot per passing test
 python -m pytest -v           # one line per test with PASSED / FAILED
 python -m pytest tests/test_dq_check.py -k weight     # a subset
 ```
@@ -460,7 +522,14 @@ from Salesforce at each import), `.sf/` and `.sfdx/` (Salesforce CLI state), `.D
 | Bulk upsert rejected label headers | Bulk API needs API names | `salesforce_import.csv` uses API names |
 | Wizard asked for the mapping at each import | The wizard maps by label, not API name | `salesforce_import_wizard.csv` with label headers |
 | Re-import would revert accepted brands | The file still contained the old brand and the suggestion | Reviewed records exported first, brand cells left empty |
+| Countries of 171 Corrected records not standardized | Reviewed records had all steward fields protected, countries included, although only brand or weight had been reviewed | Corrected records: countries standardized from their Salesforce value; Validated records still fully protected |
+| Old suggestions and defects stayed in Salesforce | A Bulk API upsert ignores empty cells | Empty cells sent as `#N/A`, which clears the field |
+| Query on `DQ_Issues__c` refused | SOQL cannot filter on a Long Text Area | Export with `sf data export bulk` and filter in Python |
 | `Barcode__c` missing from the wizard "Match by" list | Only Name and Salesforce ID offered in that list | Match on Name (holds the barcode) or map `Barcode__c` explicitly |
+| Flow deletion fails: "insufficient access rights on cross-reference id" | The flow still has versions (active or obsolete) | Delete the quick action first, deactivate the flow, then delete each version: `sf data delete record -t -s Flow -i <version Id>` |
+| "You can't create weblink of type flow" | A list button that opens a flow in a window cannot be deployed as metadata | URL list button to `/flow/<Flow_Name>?retURL=...` |
+| "We can't find this input attribute: preSelectedRows" | The Data Table pre-selection input is named `selectedRows` | Set `selectedRows` to the collection to pre-check |
+| Flow Data Table shows ~7 rows with its own scroll bar | The standard Data Table has a fixed height; no attribute (`tableHeight`, `maxHeight`…) exists | Custom LWC `suggestionReviewTable` without height limit |
 
 ---
 
@@ -469,9 +538,10 @@ from Salesforce at each import), `.sf/` and `.sfdx/` (Salesforce CLI state), `.D
 1. Create the accounts (section 4).
 2. Install the tools (5.1), set the Git identity (5.2), clone and create the virtual environment (5.3).
 3. Download the raw export (5.4).
-4. Run the pipeline (6) and the tests (9): 515 products, 61 tests passing.
+4. Run the pipeline (6) and the tests (9): 515 products, 98 tests passing.
 5. Log in to the org (5.5), validate then deploy `salesforce/force-app` (7.2), assign the permission set.
 6. Load the data with `scripts/import_salesforce.sh` (7.3) and check the count: 515.
-7. Open a record with a suggestion and test the Accept Brand Suggestion button.
+7. Open a record with a suggestion and test the Accept Suggestions button (accept and reject); on the list, test the
+   Accept Suggestions list button (uncheck one row, accept the others).
 8. Optional: set `ANTHROPIC_API_KEY` and run the AI assistant (8).
 9. Commit and push (10); check the Actions tab is green.
