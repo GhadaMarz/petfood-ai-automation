@@ -7,11 +7,19 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 import pandas as pd
 
+from dq_check import standardize_countries
+
 DATA = Path(__file__).resolve().parents[1] / "data"
-# Barcodes of records a data steward has already reviewed in Salesforce, exported just before an import.
+# Records a data steward has already reviewed in Salesforce (barcode, review status, countries), exported just
+# before an import.
 REVIEWED_BARCODES = DATA / "reviewed_barcodes.csv"
 # Fields a data steward decides on in Salesforce: an import must never overwrite them on reviewed records.
 STEWARD_FIELDS = ["Brand__c", "Suggested_Brand__c", "Weight_g__c", "Suggested_Weight_g__c"]
+COUNTRY_FIELDS = ["Countries__c", "Suggested_Countries__c"]
+# Upsert keys: always filled, never cleared.
+KEY_FIELDS = ["Name", "Barcode__c"]
+# In a Bulk API upsert an empty cell leaves the field unchanged; "#N/A" clears it.
+CLEAR = "#N/A"
 
 
 def build_import(df):
@@ -28,14 +36,15 @@ def build_import(df):
         "Name": df["code"],
         "Barcode__c": df["code"],
         "Product_Name__c": txt("product_name", 255),
-        "Brand__c": txt("brands", 255),
+        "Brand__c": txt("standardized_brand", 255),
         "Suggested_Brand__c": txt("suggested_brand", 255),
         "Categories__c": txt("categories", 1000),
         "Ingredients__c": txt("ingredients_text", 5000),
         "Quantity__c": txt("quantity", 255),
         "Weight_g__c": whole("product_quantity"),
         "Suggested_Weight_g__c": whole("suggested_quantity"),
-        "Countries__c": txt("countries", 255),
+        "Countries__c": txt("standardized_countries", 255),
+        "Suggested_Countries__c": txt("suggested_countries", 255),
         "Last_Modified__c": pd.to_datetime(df["last_modified_datetime"], errors="coerce", utc=True).dt.strftime("%Y-%m-%d"),
         "Protein_Pct__c": num("proteins_100g", 1),
         "Fat_Pct__c": num("fat_100g", 1),
@@ -45,11 +54,30 @@ def build_import(df):
     }).dropna(subset=["Barcode__c"])
 
 
-def protect_reviewed(out, reviewed_barcodes):
-    """Blank the steward fields of already reviewed records. An upsert ignores empty cells, so the brand and weight a
-    data steward decided on in Salesforce are kept, while every other field is still refreshed."""
+def clear_empty_fields(out):
+    """Write "#N/A" in every empty cell, so that Salesforce mirrors the pipeline: a value that disappeared (a suggestion
+    made unnecessary, a defect fixed in the source) is removed instead of being left unchanged by the upsert."""
     out = out.copy()
-    out.loc[out["Barcode__c"].isin(set(reviewed_barcodes)), STEWARD_FIELDS] = pd.NA
+    for field in out.columns.difference(KEY_FIELDS):
+        out[field] = out[field].astype("string").replace("", pd.NA).fillna(CLEAR)
+    return out
+
+
+def protect_reviewed(out, reviewed):
+    """Keep the decisions of a data steward. An upsert ignores empty cells, so blanking a field keeps its Salesforce
+    value while every other field is still refreshed.
+    - Reviewed records (Corrected or Validated): brand and weight are blanked.
+    - Validated records (suggestions rejected): countries are blanked too.
+    - Corrected records: the countries are standardized from their Salesforce value, not from the source, so that a
+      country accepted in Salesforce is kept and a country never reviewed is still standardized or suggested."""
+    out = out.copy()
+    status = out["Barcode__c"].map(reviewed.set_index("Barcode__c")["Review_Status__c"])
+    out.loc[status.notna(), STEWARD_FIELDS] = pd.NA
+    out.loc[status.eq("Validated"), COUNTRY_FIELDS] = pd.NA
+    corrected = status.eq("Corrected")
+    salesforce_countries = out["Barcode__c"].map(reviewed.set_index("Barcode__c")["Countries__c"])[corrected]
+    for field, values in zip(COUNTRY_FIELDS, zip(*salesforce_countries.map(standardize_countries))):
+        out.loc[corrected, field] = pd.Series(values, index=salesforce_countries.index).replace("", pd.NA).fillna(CLEAR)
     return out
 
 
@@ -66,12 +94,13 @@ def field_labels():
 
 if __name__ == "__main__":
     # Load the data-quality report created by the previous processing step.
-    out = build_import(pd.read_csv(DATA / "dq_report.csv", dtype=str, sep=";", encoding="utf-8-sig"))
+    out = clear_empty_fields(build_import(pd.read_csv(DATA / "dq_report.csv", dtype=str, sep=";",
+                                                             encoding="utf-8-sig")))
 
     if REVIEWED_BARCODES.exists():
-        reviewed = pd.read_csv(REVIEWED_BARCODES, dtype=str)["Barcode__c"].dropna()
+        reviewed = pd.read_csv(REVIEWED_BARCODES, dtype=str).dropna(subset=["Barcode__c"])
         out = protect_reviewed(out, reviewed)
-        print(f"Reviewed records protected (brand and weight left unchanged): {out['Barcode__c'].isin(set(reviewed)).sum()}")
+        print(f"Reviewed records protected (brand and weight left unchanged): {out['Barcode__c'].isin(reviewed['Barcode__c']).sum()}")
     else:
         print("No reviewed_barcodes.csv: brand fields of reviewed records are NOT protected")
 
@@ -80,6 +109,8 @@ if __name__ == "__main__":
     print(f"Rows ready for Salesforce: {len(out)}")
 
     # Same file with field labels as headers ("Product Name"...): the Data Import Wizard maps columns by label,
-    # so it maps this file on its own instead of asking for the mapping at every import.
-    out.rename(columns=field_labels()).to_csv(DATA / "salesforce_import_wizard.csv", index=False)
+    # so it maps this file on its own instead of asking for the mapping at every import. The wizard cannot clear a
+    # field, and would store "#N/A" as text, so cleared suggestions are left empty there.
+    wizard = out.replace(CLEAR, "").rename(columns=field_labels())
+    wizard.to_csv(DATA / "salesforce_import_wizard.csv", index=False)
     print("Data Import Wizard file: data/salesforce_import_wizard.csv")

@@ -57,3 +57,9 @@ def test_response_text_joins_text_blocks():
 def test_response_text_stops_on_refusal_or_truncation(stop_reason):
     with pytest.raises(SystemExit):
         response_text(fake_response(stop_reason, "partial"))
+
+
+def test_brand_conflicts_skip_variants_already_standardized():
+    df = report({"brands": "royal canin", "standardized_brand": "Royal Canin"},
+                {"brands": "Royal", "standardized_brand": "Royal"})
+    assert [c["brand"] for c in brand_conflicts(df)] == ["Royal"]

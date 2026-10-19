@@ -70,8 +70,9 @@ def load_report():
 
 
 def brand_conflicts(df):
-    """One entry per brand spelling that is filled in but not exactly "Royal Canin", with evidence for the decision."""
-    brands = df["brands"].str.strip()
+    """One entry per brand spelling that is filled in but not exactly "Royal Canin", with evidence for the decision.
+    When the report has a standardized brand, case and space variants are already fixed and are not sent."""
+    brands = df.get("standardized_brand", df["brands"]).str.strip()
     conflicts = df[brands.notna() & (brands != "Royal Canin")].assign(brand=brands)
     entries = []
     for brand, group in conflicts.groupby("brand", sort=True):
