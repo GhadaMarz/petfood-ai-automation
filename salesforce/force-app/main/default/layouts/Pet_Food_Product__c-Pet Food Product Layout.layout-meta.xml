@@ -40,6 +40,10 @@
                 <behavior>Edit</behavior>
                 <field>Countries__c</field>
             </layoutItems>
+            <layoutItems>
+                <behavior>Edit</behavior>
+                <field>Suggested_Countries__c</field>
+            </layoutItems>
         </layoutColumns>
         <style>TwoColumnsTopToBottom</style>
     </layoutSections>
@@ -131,7 +135,7 @@
     <platformActionList>
         <actionListContext>Record</actionListContext>
         <platformActionListItems>
-            <actionName>Pet_Food_Product__c.Accept_Brand_Suggestion</actionName>
+            <actionName>Pet_Food_Product__c.Accept_Suggestions</actionName>
             <actionType>QuickAction</actionType>
             <sortOrder>0</sortOrder>
         </platformActionListItems>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<QuickAction xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Review the brand and weight suggestions of this product, then accept or reject them.</description>
+    <flowDefinition>Accept_Suggestions</flowDefinition>
+    <label>Accept Suggestions</label>
+    <optionsCreateFeedItem>false</optionsCreateFeedItem>
+    <type>Flow</type>
+</QuickAction>

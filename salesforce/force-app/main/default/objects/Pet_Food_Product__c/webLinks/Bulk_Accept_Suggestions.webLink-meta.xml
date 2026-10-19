@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<WebLink xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Bulk_Accept_Suggestions</fullName>
+    <availability>online</availability>
+    <description>List view button: opens the Bulk Accept Suggestions flow, which lists every pending suggestion for review.</description>
+    <displayType>massActionButton</displayType>
+    <encodingKey>UTF-8</encodingKey>
+    <linkType>url</linkType>
+    <masterLabel>Accept Suggestions</masterLabel>
+    <openType>replace</openType>
+    <protected>false</protected>
+    <requireRowSelection>false</requireRowSelection>
+    <url>/flow/Bulk_Accept_Suggestions?retURL=/lightning/o/Pet_Food_Product__c/list</url>
+</WebLink>

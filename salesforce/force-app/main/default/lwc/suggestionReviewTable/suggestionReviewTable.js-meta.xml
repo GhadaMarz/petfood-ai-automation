@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>68.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>Suggestion Review Table</masterLabel>
+    <description>Full-height table of Pet Food Products with pending suggestions, every row pre-checked.</description>
+    <targets>
+        <target>lightning__FlowScreen</target>
+    </targets>
+    <targetConfigs>
+        <targetConfig targets="lightning__FlowScreen">
+            <property name="records" type="@salesforce/schema/Pet_Food_Product__c[]" role="inputOnly" label="Products"/>
+            <property name="selectedRecords" type="@salesforce/schema/Pet_Food_Product__c[]" role="outputOnly" label="Checked products"/>
+        </targetConfig>
+    </targetConfigs>
+</LightningComponentBundle>

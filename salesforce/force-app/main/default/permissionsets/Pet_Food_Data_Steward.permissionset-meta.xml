@@ -85,6 +85,11 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
+        <field>Pet_Food_Product__c.Suggested_Countries__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
         <field>Pet_Food_Product__c.Weight_g__c</field>
         <readable>true</readable>
     </fieldPermissions>

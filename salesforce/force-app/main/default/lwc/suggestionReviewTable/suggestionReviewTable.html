@@ -1,0 +1,13 @@
+<template>
+    <div class="slds-grid slds-grid_vertical-align-end slds-m-bottom_small">
+        <div class="slds-col slds-size_1-of-2">
+            <lightning-input type="search" label="Search" variant="label-hidden" placeholder="Search this list..."
+                onchange={handleSearch}></lightning-input>
+        </div>
+        <div class="slds-col slds-text-align_right slds-text-body_small">{summary}</div>
+    </div>
+    <!-- No height on the container: the table grows with its rows and the page scrolls, not the table. -->
+    <lightning-datatable key-field="Id" data={visibleRows} columns={columns} selected-rows={visibleSelectedIds}
+        onrowselection={handleRowSelection} column-widths-mode="auto" wrap-text-max-lines="2"
+        show-row-number-column></lightning-datatable>
+</template>

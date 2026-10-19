@@ -7,6 +7,11 @@
         <type>Text</type>
     </nameField>
     <deploymentStatus>Deployed</deploymentStatus>
+    <searchLayouts>
+        <excludedStandardButtons>ChangeOwner</excludedStandardButtons>
+        <excludedStandardButtons>PrintableListView</excludedStandardButtons>
+        <listViewButtons>Bulk_Accept_Suggestions</listViewButtons>
+    </searchLayouts>
     <sharingModel>ReadWrite</sharingModel>
     <enableReports>true</enableReports>
     <enableSearch>true</enableSearch>
