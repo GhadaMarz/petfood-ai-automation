@@ -73,7 +73,8 @@ petfood-ai-automation/
 │       ├── lwc/suggestionReviewTable/  Full-height table used by Bulk_Accept_Suggestions
 │       └── quickActions/         Button that launches Accept_Suggestions on a record
 ├── docs/
-│   └── TECHNICAL_GUIDE.md        This guide
+│   ├── TECHNICAL_GUIDE.md        This guide
+│   └── images/                   Screenshots shown in the README
 ├── .github/workflows/tests.yml   CI: install dependencies and run pytest
 ├── .vscode/
 │   ├── settings.json             pytest in the Testing panel, hidden technical folders

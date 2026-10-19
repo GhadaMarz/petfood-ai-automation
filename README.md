@@ -2,9 +2,7 @@
 
 AI-assisted data quality and test automation for a pet food product catalogue.
 
-Real product master data is rarely clean. This project takes the public Open Pet Food Facts catalogue, isolates the
-Royal Canin products, measures their data quality with explicit rules, suggests corrections where they can be derived
-safely, and loads the results into a Salesforce org where a data steward reviews and accepts them.
+Real product master data is rarely clean. This project takes the public Open Pet Food Facts catalogue, isolates the Royal Canin products, measures their data quality with explicit rules, suggests corrections where they can be derived safely, and loads the results into a Salesforce org where a data steward reviews and accepts them.
 
 ```
 Open Pet Food Facts ─► Python pipeline (perimeter, 14 quality rules, suggestions) ─► Salesforce Pet Food Product object
@@ -20,7 +18,7 @@ Open Pet Food Facts ─► Python pipeline (perimeter, 14 quality rules, suggest
 | `data/` | Raw catalogue (not versioned) and the generated CSV files |
 | `scripts/` | `import_salesforce.sh`: rebuild the import file and upsert it into Salesforce |
 | `salesforce/` | Salesforce DX project: object, fields, tab, layout, permission set, flow and button (`force-app/`) |
-| `docs/` | [Technical guide](docs/TECHNICAL_GUIDE.md): installation, versions, every command, how to rebuild from scratch |
+| `docs/` | [Technical guide](docs/TECHNICAL_GUIDE.md): installation, versions, every command, how to rebuild from scratch; `images/`: screenshots |
 | `.github/workflows/` | GitHub Actions workflow that runs the tests at every push |
 | `requirements.txt`, `pytest.ini` | Python dependencies and test configuration |
 
@@ -63,6 +61,25 @@ Full setup, Salesforce deployment and every command: [docs/TECHNICAL_GUIDE.md](d
   every pending suggestion, all pre-checked: the steward unchecks the ones to leave aside and accepts the rest at once.
 - **Uses Claude for what needs language:** `ai_quality_assistant.py` classifies ambiguous brand spellings (JSON schema
   output) and writes a business-readable report from figures computed in Python.
+
+## Salesforce screens
+
+From messy catalogue to governed data: the review in Salesforce.
+
+**Bulk review.** Every pending suggestion (brand, weight, country) is listed and pre-checked. The data steward
+unchecks what to keep unchanged and accepts the rest in one click.
+
+![Bulk review of suggestions in Salesforce](docs/images/bulk-review-suggestions.png)
+
+**One record, one decision.** The data steward sees each suggestion as "current → suggested" and accepts or rejects
+it. Nothing changes without a human decision.
+
+![Accept Suggestions on one record](docs/images/accept-suggestions-record.png)
+
+**Low-code automation.** A Salesforce screen flow applies only the suggestions that exist, then records the decision:
+"Corrected" when accepted, "Validated" when rejected.
+
+<img src="docs/images/accept-suggestions-flow.png" alt="Accept Suggestions screen flow" width="480">
 
 ## Results (October 2026)
 
